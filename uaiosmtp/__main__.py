@@ -38,13 +38,13 @@ async def mail(path, mail_from, rcpt_tos, data, reply):
 from sys import argv
 import ssl
 
-binding_address, fqdn, certfile, keyfile = argv[1:]
+storage_path, binding_address, port, fqdn, certfile, keyfile = argv[1:]
 
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 context.load_cert_chain(certfile=certfile, keyfile=keyfile)
 
 loop = get_event_loop()
 
-loop.run_until_complete(start_server(Server(mail, fqdn, context), binding_address, 8025))
+loop.run_until_complete(start_server(Server(partial(mail, storage_path), fqdn, context), binding_address, int(port)))
 
 loop.run_forever()
