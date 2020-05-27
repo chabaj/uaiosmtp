@@ -146,5 +146,7 @@ async def serve(session, fqdn, ssl_context, reader, writer):
     writer.close()
 
 def Server(session, fqdn, ssl_context=None):
+    if isinstance(fqdn, str):
+        fqdn = fqdn.encode('utf-8')
     return partial(serve, session, fqdn, ssl_context)
     
