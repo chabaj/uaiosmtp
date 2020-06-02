@@ -13,27 +13,31 @@ async def mail(path, mail_from, rcpt_tos, data, reply):
     sender = await mail_from()
     await reply(250, b'Ok')
 
-    at_least_one_local_user = False
+    users = set()
     async for receiver in rcpt_tos():
         local_user = receiver.endswith('@kraamut.cz')
-        at_least_one_local_user |= local_user
+        if local_user:
+            users |= {local_user}
         
         if local_user:
             await reply(250, b'Ok')
         else:
-            await reply(551, 'User not local try to ask {}'.format(receiver.split('@')[1]).encode('utf-8'))
+            await reply(551, 'User is not local ! try to ask {}'.format(receiver.split('@')[1]).encode('utf-8'))
 
-    if at_least_one_local_user:
+    if any(users):
         await reply(354,b'End data with \\r\\n.\\r\\n')
-        
-        with open(path + '/' + filename_generator(),
+
+        filename = filename_generator()
+        with open(path + '/' + filename,
                   'wb') as f:
             f.write(await data())
-        
+            for user in users:
+                symlink(path + '/' + user + '/' + filename,
+                        path + '/' + filename)
         await reply(250, b'Ok')
     else:
         await reply(551, b'not even one receiver was a localy registed user')
-        return
+
 
 from sys import argv
 import ssl
@@ -45,6 +49,10 @@ context.load_cert_chain(certfile=certfile, keyfile=keyfile)
 
 loop = get_event_loop()
 
-loop.run_until_complete(start_server(Server(partial(mail, storage_path), fqdn, context), binding_address, int(port)))
+loop.run_until_complete(start_server(Server(partial(mail, storage_path),
+                                            fqdn,
+                                            context),
+                                     binding_address,
+                                     int(port)))
 
 loop.run_forever()
