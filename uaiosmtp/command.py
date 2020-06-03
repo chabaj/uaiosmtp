@@ -80,7 +80,7 @@ class Verify(Command):
         self.address = address
 
 
-@command('EXPN\s+(?<list>\w+(-\w+)*)')
+@command('EXPN\s+(?P<list>\w+(-\w+)*)')
 class Expand(Command):
     def __init__(self, list):
         self.list = list
@@ -95,7 +95,7 @@ class Helo(Command):
     def __init__(self, address):
         self.address = address
 
-    def __iter__(self, address):
+    def __iter__(self):
         yield self.address
 
 
@@ -152,6 +152,7 @@ class Help(Command):
 
     def __iter__(self):
         yield self.command
+
 
 @command('QUIT')
 class Quit(Command):

@@ -1,6 +1,8 @@
 from functools import partial
 import uaiosmtp.tls
+from .reply import reply
 from .command import (expect,
+                      Command,
                       UnexpectedCommand,
                       Helo, Ehlo, StartTLS,
                       MailFrom, RcptTo,
@@ -8,7 +10,29 @@ from .command import (expect,
                       Reset, Quit,
                       Verify, Expand, Help,
                       NoOp)
-from .reply import reply
+
+async def expect_potent(expect, reply, identify=None, *args, **kargs):
+    try:
+        value = await expect(*args, **kargs)
+        return value
+    except UnexpectedCommand as ue:
+        if isinstance(ue.command, Help):
+            await reply(250,
+                        'The available commands are:',
+                        *((Command.rule.pattern
+                           .replace('\s+', ' ')
+                           .replace('\s*', ''))
+                          for Command
+                          in Command.Commands))
+        elif isinstance(ue.command, (Verify, Expand)):
+            if identify is None:
+                await identify(reply, ue.command)
+            else:
+                await reply(502, 'Not implemented')
+        elif isinstance(ue.command, NoOp):
+            await reply(250, 'OK')
+        else:
+            raise
 
 async def rcpt_tos(expect):
     while True:
@@ -25,7 +49,7 @@ async def data(reply, reader):
     read = await reader.readuntil(b'\r\n.\r\n')
     return read
 
-async def serve(session, fqdn, start_tls, expect, reply, data):
+async def serve(session, identify, fqdn, start_tls, expect, reply, data):
     await reply(220, fqdn)
 
     try:
@@ -74,20 +98,24 @@ async def serve(session, fqdn, start_tls, expect, reply, data):
     except Exception as e:
         await reply('520', repr(e).encode('utf8'))
 
-async def _serve(session, fqdn, ssl_context, reader, writer):
+async def _serve(session, identify, fqdn, ssl_context, reader, writer):
     _reply = partial(reply, writer)
+    _expect = partial(expect_potent, partial(expect, reader), _reply, identify)
     start_tls = partial(writer.start_tls, ssl_context, server_hostname=fqdn)
+    
     try:
-        await serve(session, fqdn,
+        await serve(session, identify,
+                    fqdn,
                     start_tls,
-                    partial(expect, reader),
+                    _expect,
                     _reply,
                     partial(data, _reply, reader))
     finally:
         writer.close()
    
-def Server(session, fqdn, ssl_context=None):
+def Server(session, fqdn, identify=None, ssl_context=None):
+    print(session, fqdn, identify, ssl_context)
     if isinstance(fqdn, str):
         fqdn = fqdn.encode('utf-8')
-    return partial(_serve, session, fqdn, ssl_context)
+    return partial(_serve, session, identify, fqdn, ssl_context)
     
